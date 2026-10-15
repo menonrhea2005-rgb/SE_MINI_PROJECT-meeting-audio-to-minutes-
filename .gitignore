@@ -218,3 +218,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Meeting audio temporary files
+*.wav
+*.mp3
+*.m4a
+
+# Python environment and local settings
+.python-version
