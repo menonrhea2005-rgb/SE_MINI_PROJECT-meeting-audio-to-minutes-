@@ -64,11 +64,13 @@ The application allows users to review and edit the generated transcript before 
 
 \### Error Handling
 
-The workflow should handle unsupported files, empty uploads, invalid audio inputs, and transcription failures by displaying appropriate error messages.
+The workflow handles unsupported files, empty uploads, invalid audio inputs, and transcription failures with appropriate error messages.
 
 
 
 \### Testing
+
+
 
 Run the audio validation tests using:
 
@@ -77,6 +79,18 @@ Run the audio validation tests using:
 ```bash
 
 python -m unittest test\_audio\_validator -v
+
+```
+
+
+
+Run the transcription tests using:
+
+
+
+```bash
+
+python -m unittest test\_transcription -v
 
 ```
 
@@ -94,7 +108,19 @@ python -m unittest test\_minutes\_extractor -v
 
 
 
-Transcription-specific tests should also be run once implemented.
+Run all three test modules together using:
+
+
+
+```bash
+
+python -m unittest test\_audio\_validator test\_transcription test\_minutes\_extractor -v
+
+```
+
+
+
+All 16 automated tests passed during local testing.
 
 
 
