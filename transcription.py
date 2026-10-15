@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,11 +23,22 @@ class TranscriptionAdapter:
             return
 
         try:
+            import av
+
+            original_open = av.open
+
+            def compatible_open(*args, **kwargs):
+                kwargs.pop("metadata_errors", None)
+                return original_open(*args, **kwargs)
+
+            av.open = compatible_open
+
             from faster_whisper import WhisperModel
+
         except ImportError as exc:
             raise RuntimeError(
-                "Faster-Whisper is not installed. "
-                "Run: python -m pip install faster-whisper"
+                "Faster-Whisper or PyAV is not installed correctly. "
+                "Check your installation."
             ) from exc
 
         try:
