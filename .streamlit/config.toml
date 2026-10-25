@@ -1,0 +1,3 @@
+   [server]
+   # SRS MM-F-001: uploads are limited to 100 MB
+   maxUploadSize = 100
