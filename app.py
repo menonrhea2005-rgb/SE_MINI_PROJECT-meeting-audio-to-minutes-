@@ -14,6 +14,16 @@ st.set_page_config(
     layout="wide",
 )
 
+
+
+@st.cache_resource(show_spinner=False)
+def get_transcription_adapter():
+    """Create the speech-to-text adapter once and reuse it.
+
+    Loading the Whisper model is slow, so it stays in memory
+    instead of being reloaded on every click (SRS MM-NF-001).
+    """
+    return TranscriptionAdapter()
 st.title("Meeting Audio to Structured Minutes")
 st.write(
     "Upload a meeting recording to generate a transcript, "
@@ -75,7 +85,7 @@ if uploaded_file is not None:
                 with st.spinner(
                     "Loading the speech model and transcribing audio..."
                 ):
-                    adapter = TranscriptionAdapter()
+                    adapter = get_transcription_adapter()
                     result = adapter.transcribe(audio)
 
                 st.session_state["transcript"] = result.text
