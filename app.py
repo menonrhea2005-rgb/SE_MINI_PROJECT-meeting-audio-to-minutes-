@@ -1,3 +1,6 @@
+from datetime import datetime
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
@@ -83,6 +86,23 @@ def workflow_status(state, current_file_name):
     return list(zip(WORKFLOW_STEPS, done))
 
 
+def delete_temp_audio(state):
+    """Delete the temporary copy of the uploaded audio, if one exists.
+
+    SAD 3.1 step 8 / MM-SR-003: temporary audio is removed when it is
+    no longer needed, e.g. after the user removes or replaces the file.
+    """
+    path = state.pop("validated_audio_path", None)
+    state.pop("validated_audio_name", None)
+
+    if path:
+        try:
+            Path(path).unlink(missing_ok=True)
+        except OSError:
+            # Deleting is best-effort; never crash the page over it.
+            pass
+
+
 def render_workflow_status(container, steps):
     """Draw the progress tracker as one row of step labels."""
     columns = container.columns(len(steps))
@@ -117,6 +137,15 @@ uploaded_file = st.file_uploader(
     "Upload meeting audio",
     type=["wav", "mp3", "m4a"],
 )
+
+saved_audio_name = st.session_state.get("validated_audio_name")
+
+if uploaded_file is None or (
+    saved_audio_name is not None
+    and saved_audio_name != uploaded_file.name
+):
+    # The user removed or replaced the file: its temp copy is not needed.
+    delete_temp_audio(st.session_state)
 
 if uploaded_file is None:
     st.caption(
@@ -334,6 +363,9 @@ if uploaded_file is not None:
                     draft, edits
                 )
                 st.session_state["validated_minutes"] = validated
+                st.session_state["minutes_saved_at"] = (
+                    datetime.now().strftime("%H:%M:%S")
+                )
                 st.success("Your edited minutes have been saved.")
             except ValueError as exc:
                 st.error(str(exc))
@@ -347,6 +379,13 @@ if uploaded_file is not None:
             validated = st.session_state["validated_minutes"]
 
             st.subheader("Download Meeting Minutes")
+
+            st.caption(
+                "The download contains the version you last saved "
+                f"(at {st.session_state.get('minutes_saved_at', '-')}). "
+                "If you change anything above, click **Save Edited "
+                "Minutes** again before downloading."
+            )
 
             try:
                 document_bytes = DocxExporter.export(validated)
