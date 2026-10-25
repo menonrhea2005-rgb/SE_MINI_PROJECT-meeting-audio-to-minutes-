@@ -1,4 +1,4 @@
-
+import pandas as pd
 import streamlit as st
 
 from validated_audio import validate_and_save, cleanup_audio
@@ -15,7 +15,6 @@ st.set_page_config(
 )
 
 
-
 @st.cache_resource(show_spinner=False)
 def get_transcription_adapter():
     """Create the speech-to-text adapter once and reuse it.
@@ -24,6 +23,8 @@ def get_transcription_adapter():
     instead of being reloaded on every click (SRS MM-NF-001).
     """
     return TranscriptionAdapter()
+
+
 st.title("Meeting Audio to Structured Minutes")
 st.write(
     "Upload a meeting recording to generate a transcript, "
@@ -135,41 +136,65 @@ if uploaded_file is not None:
                 value="\n".join(draft.decisions),
             )
 
-            actions_text = st.text_area(
-                "Action items (one per line)",
-                value="\n".join(
-                    f"{item.task} | Owner: {item.owner} | "
-                    f"Deadline: {item.deadline}"
+            st.markdown("**Action items**")
+            st.caption(
+                "Edit any cell directly. Add a task with the + row at "
+                "the bottom; delete one by selecting its row and "
+                "pressing Delete. Leave Owner or Deadline blank if "
+                "it was not stated in the meeting."
+            )
+
+            action_rows = pd.DataFrame(
+                [
+                    {
+                        "Task": item.task,
+                        "Owner": item.owner,
+                        "Deadline": item.deadline,
+                    }
                     for item in draft.action_items
-                ),
+                ],
+                columns=["Task", "Owner", "Deadline"],
+            )
+
+            edited_actions = st.data_editor(
+                action_rows,
+                num_rows="dynamic",
+                hide_index=True,
+                column_config={
+                    "Task": st.column_config.TextColumn(
+                        "Task", width="large", required=True
+                    ),
+                    "Owner": st.column_config.TextColumn("Owner"),
+                    "Deadline": st.column_config.TextColumn("Deadline"),
+                },
             )
 
             submitted = st.form_submit_button("Save Edited Minutes")
 
         if submitted:
-            action_items = []
-
             from minutes_extractor import ActionItem
 
-            for line in actions_text.splitlines():
-                if line.strip():
-                    parts = line.split("|")
-                    task = parts[0].strip()
-                    owner = "Not specified"
-                    deadline = "Not specified"
+            def cell_text(value):
+                """Turn a table cell into clean text ('' if empty)."""
+                if value is None or pd.isna(value):
+                    return ""
+                return str(value).strip()
 
-                    for part in parts[1:]:
-                        part = part.strip()
+            action_items = []
 
-                        if part.lower().startswith("owner:"):
-                            owner = part.split(":", 1)[1].strip()
+            for row in edited_actions.to_dict("records"):
+                task = cell_text(row.get("Task"))
 
-                        elif part.lower().startswith("deadline:"):
-                            deadline = part.split(":", 1)[1].strip()
+                if not task:
+                    continue
 
-                    action_items.append(
-                        ActionItem(task, owner, deadline)
+                action_items.append(
+                    ActionItem(
+                        task,
+                        cell_text(row.get("Owner")) or "Not specified",
+                        cell_text(row.get("Deadline")) or "Not specified",
                     )
+                )
 
             edits = {
                 "title": title,
