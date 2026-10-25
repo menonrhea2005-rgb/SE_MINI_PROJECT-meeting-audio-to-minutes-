@@ -55,6 +55,52 @@ def review_note(owner, deadline):
     return "⚠️ Confirm " + " and ".join(missing)
 
 
+WORKFLOW_STEPS = [
+    "Validate audio",
+    "Transcribe",
+    "Generate minutes",
+    "Save & download",
+]
+
+
+def workflow_status(state, current_file_name):
+    """Return (step name, done?) pairs for the progress tracker.
+
+    SRS 3.1: show processing status for each stage of the workflow.
+    """
+    validated = (
+        state.get("validated_audio_path") is not None
+        and state.get("validated_audio_name") == current_file_name
+    )
+
+    done = [
+        validated,
+        validated and "transcript" in state,
+        validated and "minutes_draft" in state,
+        validated and state.get("validated_minutes") is not None,
+    ]
+
+    return list(zip(WORKFLOW_STEPS, done))
+
+
+def render_workflow_status(container, steps):
+    """Draw the progress tracker as one row of step labels."""
+    columns = container.columns(len(steps))
+
+    next_step_found = False
+
+    for column, (index, (name, done)) in zip(
+        columns, enumerate(steps, start=1)
+    ):
+        if done:
+            column.markdown(f"✅ **{index}. {name}**")
+        elif not next_step_found:
+            column.markdown(f"👉 **{index}. {name}** (next)")
+            next_step_found = True
+        else:
+            column.markdown(f"⚪ {index}. {name}")
+
+
 st.title("Meeting Audio to Structured Minutes")
 st.write(
     "Upload a meeting recording to generate a transcript, "
@@ -62,13 +108,25 @@ st.write(
 )
 
 st.info(
-    "Supported formats: WAV, MP3, M4A. Maximum file size: 100 MB."
+    "Supported formats: WAV, MP3, M4A. Maximum file size: 100 MB.  \n"
+    "WhatsApp voice notes (.opus / .ogg) are not supported: record "
+    "with Windows Sound Recorder or convert the file to MP3 first."
 )
 
 uploaded_file = st.file_uploader(
     "Upload meeting audio",
     type=["wav", "mp3", "m4a"],
 )
+
+if uploaded_file is None:
+    st.caption(
+        "After you upload a file, the steps appear here: "
+        "1. Validate audio → 2. Transcribe → 3. Generate minutes → "
+        "4. Save & download."
+    )
+
+# Filled in at the end of the script, so it reflects this run's clicks.
+status_box = st.container()
 
 if uploaded_file is not None:
     st.write(f"**File:** {uploaded_file.name}")
@@ -309,3 +367,9 @@ if uploaded_file is not None:
                         "wordprocessingml.document"
                     ),
                 )
+
+if uploaded_file is not None:
+    render_workflow_status(
+        status_box,
+        workflow_status(st.session_state, uploaded_file.name),
+    )
