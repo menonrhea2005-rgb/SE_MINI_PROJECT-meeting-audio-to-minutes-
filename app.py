@@ -141,9 +141,24 @@ if uploaded_file is not None:
         st.session_state["transcript"] = edited_transcript
 
         if st.button("Generate Meeting Minutes"):
-            draft = MinutesExtractor.extract(edited_transcript)
-            st.session_state["minutes_draft"] = draft
-            st.success("Draft meeting minutes generated.")
+            if not edited_transcript.strip():
+                st.warning(
+                    "The transcript is empty. Transcribe the audio or "
+                    "type the transcript before generating minutes."
+                )
+            else:
+                try:
+                    draft = MinutesExtractor.extract(edited_transcript)
+                except Exception:
+                    # SRS MM-F-015: show a clear message, keep the app usable.
+                    st.error(
+                        "Could not generate meeting minutes from this "
+                        "transcript. Check the transcript text and try again."
+                    )
+                else:
+                    st.session_state["minutes_draft"] = draft
+                    st.session_state.pop("validated_minutes", None)
+                    st.success("Draft meeting minutes generated.")
 
     if "minutes_draft" in st.session_state:
         draft = st.session_state["minutes_draft"]
@@ -264,20 +279,33 @@ if uploaded_file is not None:
                 st.success("Your edited minutes have been saved.")
             except ValueError as exc:
                 st.error(str(exc))
+            except Exception:
+                st.error(
+                    "Could not save the edited minutes. Check the fields "
+                    "and try again."
+                )
 
         if st.session_state.get("validated_minutes") is not None:
             validated = st.session_state["validated_minutes"]
 
             st.subheader("Download Meeting Minutes")
 
-            document_bytes = DocxExporter.export(validated)
-
-            st.download_button(
-                label="Download Minutes as Word Document",
-                data=document_bytes,
-                file_name="Meeting_Minutes.docx",
-                mime=(
-                    "application/vnd.openxmlformats-officedocument."
-                    "wordprocessingml.document"
-                ),
-            )
+            try:
+                document_bytes = DocxExporter.export(validated)
+            except Exception:
+                # SRS MM-F-015: export failures get a clear message.
+                st.error(
+                    "Could not create the Word document. Your edited "
+                    "minutes are still saved on this page; please try "
+                    "saving and downloading again."
+                )
+            else:
+                st.download_button(
+                    label="Download Minutes as Word Document",
+                    data=document_bytes,
+                    file_name="Meeting_Minutes.docx",
+                    mime=(
+                        "application/vnd.openxmlformats-officedocument."
+                        "wordprocessingml.document"
+                    ),
+                )
