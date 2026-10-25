@@ -25,6 +25,36 @@ def get_transcription_adapter():
     return TranscriptionAdapter()
 
 
+# The extractor and DOCX exporter use this text for unknown values.
+NOT_SPECIFIED = "Not specified"
+
+
+def cell_text(value):
+    """Turn a table cell into clean text ('' if the cell is empty)."""
+    if value is None or pd.isna(value):
+        return ""
+    return str(value).strip()
+
+
+def review_note(owner, deadline):
+    """Describe which action-item fields still need a human check.
+
+    SRS MM-F-010: missing owners/deadlines are flagged, never invented.
+    """
+    missing = []
+
+    if owner == NOT_SPECIFIED:
+        missing.append("owner")
+
+    if deadline == NOT_SPECIFIED:
+        missing.append("deadline")
+
+    if not missing:
+        return ""
+
+    return "⚠️ Confirm " + " and ".join(missing)
+
+
 st.title("Meeting Audio to Structured Minutes")
 st.write(
     "Upload a meeting recording to generate a transcript, "
@@ -120,6 +150,18 @@ if uploaded_file is not None:
 
         st.subheader("Review Meeting Minutes")
 
+        if draft.review_flags:
+            st.warning(
+                f"{len(draft.review_flags)} item(s) need your review. "
+                "Missing owners and deadlines are left blank and marked "
+                "in the 'Needs review' column. Fill them in only if they "
+                "were actually stated in the meeting."
+            )
+
+            with st.expander("Show items that need review"):
+                for flag in draft.review_flags:
+                    st.write(f"- {flag}")
+
         with st.form("minutes_form"):
             title = st.text_input(
                 "Meeting title",
@@ -148,12 +190,21 @@ if uploaded_file is not None:
                 [
                     {
                         "Task": item.task,
-                        "Owner": item.owner,
-                        "Deadline": item.deadline,
+                        "Owner": (
+                            "" if item.owner == NOT_SPECIFIED
+                            else item.owner
+                        ),
+                        "Deadline": (
+                            "" if item.deadline == NOT_SPECIFIED
+                            else item.deadline
+                        ),
+                        "Needs review": review_note(
+                            item.owner, item.deadline
+                        ),
                     }
                     for item in draft.action_items
                 ],
-                columns=["Task", "Owner", "Deadline"],
+                columns=["Task", "Owner", "Deadline", "Needs review"],
             )
 
             edited_actions = st.data_editor(
@@ -166,6 +217,14 @@ if uploaded_file is not None:
                     ),
                     "Owner": st.column_config.TextColumn("Owner"),
                     "Deadline": st.column_config.TextColumn("Deadline"),
+                    "Needs review": st.column_config.TextColumn(
+                        "Needs review",
+                        disabled=True,
+                        help=(
+                            "Fields the system could not find in the "
+                            "transcript when the minutes were generated."
+                        ),
+                    ),
                 },
             )
 
@@ -173,12 +232,6 @@ if uploaded_file is not None:
 
         if submitted:
             from minutes_extractor import ActionItem
-
-            def cell_text(value):
-                """Turn a table cell into clean text ('' if empty)."""
-                if value is None or pd.isna(value):
-                    return ""
-                return str(value).strip()
 
             action_items = []
 
@@ -191,8 +244,8 @@ if uploaded_file is not None:
                 action_items.append(
                     ActionItem(
                         task,
-                        cell_text(row.get("Owner")) or "Not specified",
-                        cell_text(row.get("Deadline")) or "Not specified",
+                        cell_text(row.get("Owner")) or NOT_SPECIFIED,
+                        cell_text(row.get("Deadline")) or NOT_SPECIFIED,
                     )
                 )
 
@@ -228,8 +281,3 @@ if uploaded_file is not None:
                     "wordprocessingml.document"
                 ),
             )
-
-            if draft.review_flags:
-                with st.expander("Items that may need your review"):
-                    for flag in draft.review_flags:
-                        st.write(f"- {flag}")
